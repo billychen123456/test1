@@ -487,7 +487,7 @@ def handle_message(event):
                 ),
                 URITemplateAction(
                     label='聯絡作者',
-                    uri='https://www.facebook.com/TWTRubiks?ref=bookmarks'
+                    uri='https://thingspeak.com/channels/277283/private_show'
                 )
             ]
         )
