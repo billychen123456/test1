@@ -1,6 +1,7 @@
 import requests
 import re
 import random
+import configparser
 from bs4 import BeautifulSoup
 from flask import Flask, request, abort
 from imgurpython import ImgurClient
@@ -14,11 +15,15 @@ from linebot.exceptions import (
 from linebot.models import *
 
 app = Flask(__name__)
-line_bot_api = LineBotApi('YOUR_CHANNEL_ACCESS_TOKEN')
-handler = WebhookHandler('YOUR_CHANNEL_SECRET')
-client_id = 'YOUR_IMGUR_CLIENT_ID'
-client_secret = 'YOUR_IMGUR__CLIENT_SECRET'
-album_id = 'YOUR_IMGUR_ALBUM_ID'
+config = configparser.ConfigParser()
+config.read("config.ini")
+
+line_bot_api = LineBotApi(config['line_bot']['Channel_Access_Token'])
+handler = WebhookHandler(config['line_bot']['Channel_Secret'])
+client_id = config['imgur_api']['Client_ID']
+client_secret = config['imgur_api']['Client_Secret']
+album_id = config['imgur_api']['Album_ID']
+API_Get_Image = config['other_api']['API_Get_Image']
 
 
 @app.route("/callback", methods=['POST'])
@@ -37,11 +42,14 @@ def callback():
     except InvalidSignatureError:
         abort(400)
 
-    return 200
+    return 'ok'
 
 
 def pattern_mega(text):
-    patterns = ['mega', 'mg', 'mu', 'ＭＥＧＡ', 'ＭＥ', 'ＭＵ', 'ｍｅ', 'ｍｕ', 'ｍｅｇａ']
+    patterns = [
+        'mega', 'mg', 'mu', 'ＭＥＧＡ', 'ＭＥ', 'ＭＵ',
+        'ｍｅ', 'ｍｕ', 'ｍｅｇａ', 'GD', 'MG', 'google',
+    ]
     for pattern in patterns:
         if re.search(pattern, text, re.IGNORECASE):
             return True
@@ -57,7 +65,7 @@ def eyny_movie():
     for titleURL in soup.select('.bm_c tbody .xst'):
         if pattern_mega(titleURL.text):
             title = titleURL.text
-            if '10990869-1-3' in titleURL['href']:
+            if '11379780-1-3' in titleURL['href']:
                 continue
             link = 'http://www.eyny.com/' + titleURL['href']
             data = '{}\n{}\n\n'.format(title, link)
@@ -189,7 +197,7 @@ def ptt_beauty():
     soup = BeautifulSoup(res.text, 'html.parser')
     all_page_url = soup.select('.btn.wide')[1]['href']
     start_page = get_page_number(all_page_url)
-    page_term = 3  # crawler count
+    page_term = 2  # crawler count
     push_rate = 10  # 推文
     index_list = []
     article_list = []
@@ -305,11 +313,11 @@ def handle_message(event):
             event.reply_token,
             TextSendMessage(text=content))
         return 0
-    if event.message.text == "隨便來張正妹圖片":
+    if event.message.text == "來張 imgur 正妹圖片":
         client = ImgurClient(client_id, client_secret)
         images = client.get_album_images(album_id)
         index = random.randint(0, len(images) - 1)
-        url = images[index].link.replace('http', 'https')
+        url = images[index].link
         image_message = ImageSendMessage(
             original_content_url=url,
             preview_image_url=url
@@ -317,7 +325,16 @@ def handle_message(event):
         line_bot_api.reply_message(
             event.reply_token, image_message)
         return 0
-
+    if event.message.text == "隨便來張正妹圖片":
+        image = requests.get(API_Get_Image)
+        url = image.json().get('Url')
+        image_message = ImageSendMessage(
+            original_content_url=url,
+            preview_image_url=url
+        )
+        line_bot_api.reply_message(
+            event.reply_token, image_message)
+        return 0
     if event.message.text == "近期熱門廢文":
         content = ptt_hot()
         line_bot_api.reply_message(
@@ -350,7 +367,7 @@ def handle_message(event):
         return 0
     if event.message.text == "開始玩":
         buttons_template = TemplateSendMessage(
-            alt_text='Buttons template',
+            alt_text='開始玩 template',
             template=ButtonsTemplate(
                 title='選擇服務',
                 text='請選擇',
@@ -379,7 +396,7 @@ def handle_message(event):
         return 0
     if event.message.text == "新聞":
         buttons_template = TemplateSendMessage(
-            alt_text='Buttons template',
+            alt_text='新聞 template',
             template=ButtonsTemplate(
                 title='新聞類型',
                 text='請選擇',
@@ -404,7 +421,7 @@ def handle_message(event):
         return 0
     if event.message.text == "電影":
         buttons_template = TemplateSendMessage(
-            alt_text='Buttons template',
+            alt_text='電影 template',
             template=ButtonsTemplate(
                 title='服務類型',
                 text='請選擇',
@@ -425,7 +442,7 @@ def handle_message(event):
         return 0
     if event.message.text == "看廢文":
         buttons_template = TemplateSendMessage(
-            alt_text='Buttons template',
+            alt_text='看廢文 template',
             template=ButtonsTemplate(
                 title='你媽知道你在看廢文嗎',
                 text='請選擇',
@@ -446,7 +463,7 @@ def handle_message(event):
         return 0
     if event.message.text == "正妹":
         buttons_template = TemplateSendMessage(
-            alt_text='Buttons template',
+            alt_text='正妹 template',
             template=ButtonsTemplate(
                 title='選擇服務',
                 text='請選擇',
@@ -455,6 +472,10 @@ def handle_message(event):
                     MessageTemplateAction(
                         label='PTT 表特版 近期大於 10 推的文章',
                         text='PTT 表特版 近期大於 10 推的文章'
+                    ),
+                    MessageTemplateAction(
+                        label='來張 imgur 正妹圖片',
+                        text='來張 imgur 正妹圖片'
                     ),
                     MessageTemplateAction(
                         label='隨便來張正妹圖片',
@@ -467,7 +488,7 @@ def handle_message(event):
         return 0
 
     buttons_template = TemplateSendMessage(
-        alt_text='Buttons template',
+        alt_text='目錄 template',
         template=ButtonsTemplate(
             title='選擇服務',
             text='請選擇',
@@ -487,7 +508,7 @@ def handle_message(event):
                 ),
                 URITemplateAction(
                     label='聯絡作者',
-                    uri='https://thingspeak.com/channels/277283/private_show'
+                    uri='https://www.facebook.com/TWTRubiks?ref=bookmarks'
                 )
             ]
         )
